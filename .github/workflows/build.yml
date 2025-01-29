@@ -35,4 +35,11 @@ jobs:
       - name: upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          path: "*.tb2"
+          path: "${{ env.VER }}_rel"
+      - name: release
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: "*.tb2"
+          makeLatest: true
+          tag: ${{ env.VER }}
