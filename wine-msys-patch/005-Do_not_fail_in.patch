@@ -1,0 +1,39 @@
+From bf98241c98a277f14874e48c48923fcf97f0addc Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Thu, 4 Jul 2024 11:05:35 +0200
+Subject: [PATCH] ws2_32: Do not fail in closesocket for unknown socket.
+
+This makes cygwin64's rsync happy. It seems to fork a child process
+of itself which wants to close sockets derived from the parent process.
+
+Kind of related Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=54995
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=56927
+
+rsync -aq --delete-before dir-a dir-b
+  rsync: [Receiver] Failed to dup/close: Socket operation on non-socket (108)
+  rsync error: error in IPC code (code 14) at pipe.c(157) [Receiver=3.2.7]
+  rsync: connection unexpectedly closed (0 bytes received so far) [sender]
+  rsync error: error in rsync protocol data stream (code 12) at io.c(231) [sender=3.2.7]
+---
+ dlls/ws2_32/socket.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/ws2_32/socket.c b/dlls/ws2_32/socket.c
+index 66dd32dd98d..4b94e5cce97 100644
+--- a/dlls/ws2_32/socket.c
++++ b/dlls/ws2_32/socket.c
+@@ -1203,8 +1203,9 @@ int WINAPI closesocket( SOCKET s )
+ 
+     if (!socket_list_remove( s ))
+     {
+-        SetLastError( WSAENOTSOCK );
+-        return -1;
++        /* Seems wine lacks on fork this socket */
++        //SetLastError( WSAENOTSOCK );
++        //return -1;
+     }
+ 
+     CloseHandle( (HANDLE)s );
+-- 
+GitLab
+

@@ -1,0 +1,200 @@
+From c1a0addaca7eb8c796982cc5534a29854ef618d8 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Sun, 28 May 2023 14:49:24 +0200
+Subject: [PATCH] ws2_32: Disable check for local socket handles.
+
+MSYS does a `dup(sockfd)` via DuplicateHandle.
+Unfortunately that way the new handle is not contained in
+the ws2_32.socket_list.
+
+This change just disables this check to workaround this.
+
+
+Kind of related: https://bugs.winehq.org/show_bug.cgi?id=54413
+
+
+wine c:/msys64/usr/bin/git.exe clone --mirror git://sourceware.org/git/newlib-cygwin.git /home/bernhard/MSYS2-packages/msys2-runtime/msys2-runtime
+
+
+(rr) list fhandler_base::dup
+1320    int
+1321    fhandler_base::dup (fhandler_base *child, int flags)
+1322    {
+1323      debug_printf ("in fhandler_base dup");
+1324
+1325      HANDLE nh;
+1326      if (!nohandle () && !archetype)
+1327        {
+1328          if (!DuplicateHandle (GetCurrentProcess (), get_handle (),
+1329                                GetCurrentProcess (), &nh,
+1330                                0, !(flags & O_CLOEXEC), DUPLICATE_SAME_ACCESS))
+1331            {
+1332              debug_printf ("dup(%s) failed, handle %p, %E",
+1333                            get_name (), get_handle ());
+1334              __seterrno ();
+1335              return -1;
+1336            }
+1337
+1338          VerifyHandle (nh);
+1339          child->set_handle (nh);
+1340        }
+1341      return 0;
+1342    }
+(rr) print x
+$29 = (HANDLE) 0x150
+(rr) bt
+#0  fhandler_base::set_handle (this=0x800027a28, x=0x150) at /home/Benutzer1/MSYS2-packages/msys2-runtime/src/msys2-runtime/winsup/cygwin/local_includes/fhandler.h:238
+#1  0x000000018011315a in fhandler_base::dup (this=0x800027318, child=0x800027a28, flags=32768) at /home/Benutzer1/MSYS2-packages/msys2-runtime/src/msys2-runtime/winsup/cygwin/fhandler/base.cc:1339
+#2  0x000000018015a8c8 in fhandler_socket_wsock::dup (this=0x800027318, child=0x800027a28, flags=32768) at /home/Benutzer1/MSYS2-packages/msys2-runtime/src/msys2-runtime/winsup/cygwin/fhandler/socket_inet.cc:558
+#3  0x000000018005f6ec in dtable::dup_worker (this=0x800004858, oldfh=0x800027318, flags=32768) at /home/Benutzer1/MSYS2-packages/msys2-runtime/src/msys2-runtime/winsup/cygwin/dtable.cc:707
+#4  0x000000018005fa56 in dtable::dup3 (this=0x800004858, oldfd=3, newfd=4, flags=32768) at /home/Benutzer1/MSYS2-packages/msys2-runtime/src/msys2-runtime/winsup/cygwin/dtable.cc:774
+#5  0x00000001800dd567 in dup (fd=3) at /home/Benutzer1/MSYS2-packages/msys2-runtime/src/msys2-runtime/winsup/cygwin/syscalls.cc:96
+#6  0x00000001801c348b in _sigfe () at sigfe.s:36
+#7  0x0000000a00000003 in ?? ()
+#8  0x0000000000000040 in ?? ()
+#9  0x0a0a0a0a0a0a0a0a in ?? ()
+#10 0x0000000a00003e66 in ?? ()
+#11 0x0000000a00003e90 in ?? ()
+#12 0x000000010050d4b2 in git_connect_git (fd=fd@entry=0xa00003c40, hostandport=0xa00003e70 "sourceware.org", path=0xa00003e50 "/git/newlib-cygwin.git", prog=prog@entry=0x10067bcd9 <junk_leave_repo_msg+1913> "git-upload-pack", version=version@entry=protocol_v2, flags=flags@entry=0) at connect.c:1257
+#13 0x000000010050e4ad in git_connect (fd=fd@entry=0xa00003c40, url=0xa000033e0 "git://sourceware.org/git/newlib-cygwin.git", prog=0x10067bcd9 <junk_leave_repo_msg+1913> "git-upload-pack", flags=0) at connect.c:1437
+#14 0x0000000100622f65 in connect_setup (transport=transport@entry=0xa000038a0, for_push=for_push@entry=0) at transport.c:278
+#15 0x0000000100623043 in handshake (transport=0xa000038a0, for_push=0, options=0x67dfc800, must_list_refs=must_list_refs@entry=1) at transport.c:313
+#16 0x0000000100623254 in get_refs_via_connect (transport=<optimized out>, for_push=<optimized out>, options=<optimized out>) at transport.c:360
+#17 0x0000000100624f9c in transport_get_remote_refs (transport=transport@entry=0xa000038a0, transport_options=transport_options@entry=0x67dfc800) at transport.c:1474
+#18 0x0000000100426005 in cmd_clone (argc=<optimized out>, argv=<optimized out>, prefix=<optimized out>) at builtin/clone.c:1274
+#19 0x0000000100401330 in run_builtin (p=0x10065a218 <commands+504>, argc=argc@entry=4, argv=argv@entry=0x67dfcc08) at git.c:445
+#20 0x00000001004015e2 in handle_builtin (argc=4, argv=0x67dfcc08) at git.c:699
+#21 0x0000000100402aa3 in run_argv (argcp=argcp@entry=0x67dfcb70, argv=argv@entry=0x67dfcb78) at git.c:763
+#22 0x0000000100402f28 in cmd_main (argc=<optimized out>, argc@entry=5, argv=<optimized out>, argv@entry=0x67dfcc00) at git.c:898
+#23 0x00000001004ce4d7 in main (argc=5, argv=0x67dfcc00) at common-main.c:57
+---
+ dlls/ws2_32/socket.c | 78 ++++++++++++++++++++++----------------------
+ 1 file changed, 39 insertions(+), 39 deletions(-)
+
+diff --git a/dlls/ws2_32/socket.c b/dlls/ws2_32/socket.c
+index eb84558cbac..66dd32dd98d 100644
+--- a/dlls/ws2_32/socket.c
++++ b/dlls/ws2_32/socket.c
+@@ -396,24 +396,24 @@ static BOOL socket_list_add(SOCKET socket)
+ }
+ 
+ 
+-static BOOL socket_list_find( SOCKET socket )
+-{
+-    unsigned int i;
+-
+-    if (!socket) return FALSE;
+-
+-    EnterCriticalSection( &cs_socket_list );
+-    for (i = 0; i < socket_list_size; ++i)
+-    {
+-        if (socket_list[i] == socket)
+-        {
+-            LeaveCriticalSection( &cs_socket_list );
+-            return TRUE;
+-        }
+-    }
+-    LeaveCriticalSection( &cs_socket_list );
+-    return FALSE;
+-}
++//static BOOL socket_list_find( SOCKET socket )
++//{
++//    unsigned int i;
++//
++//    if (!socket) return FALSE;
++//
++//    EnterCriticalSection( &cs_socket_list );
++//    for (i = 0; i < socket_list_size; ++i)
++//    {
++//        if (socket_list[i] == socket)
++//        {
++//            LeaveCriticalSection( &cs_socket_list );
++//            return TRUE;
++//        }
++//    }
++//    LeaveCriticalSection( &cs_socket_list );
++//    return FALSE;
++//}
+ 
+ 
+ static BOOL socket_list_remove( SOCKET socket )
+@@ -1000,11 +1000,11 @@ static int WS2_sendto( SOCKET s, WSABUF *buffers, DWORD buffer_count, DWORD *ret
+            "addr_len %d, overlapped %p, completion %p\n",
+            s, buffers, buffer_count, flags, addr, addr_len, overlapped, completion );
+ 
+-    if (!socket_list_find( s ))
+-    {
+-        SetLastError( WSAENOTSOCK );
+-        return -1;
+-    }
++//    if (!socket_list_find( s ))
++//    {
++//        SetLastError( WSAENOTSOCK );
++//        return -1;
++//    }
+ 
+     if (!overlapped && !ret_size)
+     {
+@@ -1518,11 +1518,11 @@ int WINAPI getpeername( SOCKET s, struct sockaddr *addr, int *len )
+ 
+     TRACE( "socket %#Ix, addr %p, len %d\n", s, addr, len ? *len : 0 );
+ 
+-    if (!socket_list_find( s ))
+-    {
+-        WSASetLastError( WSAENOTSOCK );
+-        return -1;
+-    }
++//    if (!socket_list_find( s ))
++//    {
++//        WSASetLastError( WSAENOTSOCK );
++//        return -1;
++//    }
+ 
+     /* Windows checks the validity of the socket before checking len, so
+      * let wineserver do the same. Since len being NULL and *len being 0
+@@ -1590,11 +1590,11 @@ int WINAPI getsockopt( SOCKET s, int level, int optname, char *optval, int *optl
+ 
+     if ((level != SOL_SOCKET || optname != SO_OPENTYPE))
+     {
+-        if (!socket_list_find( s ))
+-        {
+-            SetLastError( WSAENOTSOCK );
+-            return SOCKET_ERROR;
+-        }
++//        if (!socket_list_find( s ))
++//        {
++//            SetLastError( WSAENOTSOCK );
++//            return SOCKET_ERROR;
++//        }
+         if (!optlen || *optlen <= 0)
+         {
+             SetLastError( WSAEFAULT );
+@@ -2993,7 +2993,7 @@ int WINAPI WSAPoll( WSAPOLLFD *fds, ULONG count, int timeout )
+     {
+         unsigned int flags = AFD_POLL_HUP | AFD_POLL_RESET | AFD_POLL_CONNECT_ERR;
+ 
+-        if ((INT_PTR)fds[i].fd < 0 || !socket_list_find( fds[i].fd ))
++        if ((INT_PTR)fds[i].fd < 0 /*|| !socket_list_find( fds[i].fd )*/)
+         {
+             fds[i].revents = POLLNVAL;
+             continue;
+@@ -3768,11 +3768,11 @@ BOOL WINAPI WSAGetOverlappedResult( SOCKET s, LPWSAOVERLAPPED lpOverlapped,
+         return FALSE;
+     }
+ 
+-    if (!socket_list_find( s ))
+-    {
+-        SetLastError( WSAENOTSOCK );
+-        return FALSE;
+-    }
++//    if (!socket_list_find( s ))
++//    {
++//        SetLastError( WSAENOTSOCK );
++//        return FALSE;
++//    }
+ 
+     /* Paired with the write-release in set_async_iosb() in ntdll; see the
+      * latter for details. */
+-- 
+GitLab
+

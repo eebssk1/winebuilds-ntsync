@@ -1,0 +1,42 @@
+From 395d920e4ea718aeff6e9667c821b42da88c2f41 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Wed, 24 May 2023 22:44:57 +0200
+Subject: [PATCH] server: Allow access with PROCESS_QUERY_INFORMATION.
+
+0128:fixme:sync:QueryUnbiasedInterruptTimePrecise (000000000031BB50): semi-stub.
+      0 [main] gpg 1017 fixup_mmaps_after_fork: VirtualQueryEx failed for MAP_PRIVATE address 0x7FFC0000, Win32 error 5
+  15823 [main] gpg 1017 C:\msys64\usr\bin\gpg.exe: *** fatal error in forked process - recreate_mmaps_after_fork_failed
+0128:trace:unixpid:NtTerminateProcess unixpid=120034 L"\"C:\\msys64\\usr\\bin\\gpg.exe\" --homedir /etc/pacman.d/gnupg/ --no-permission-warning -K --with-colons" self=1 NtCurrentTeb()=0x67fe0000 NtCurrentTeb()->Peb=0x67ff0000 :999
+8064141 [main] gpg 1016 dofork: child -1 - forked process 292 died unexpectedly, retry 0, exit code 0x100, errno 11
+00d4:fixme:virtual:get_extended_params Not supported requirements LowestStartingAddress 0x1000000000, Alignment (nil).
+gpg: Fehler beim "Forken" des Prozess: Resource temporarily unavailable
+gpg: failed to start agent '/usr/bin/gpg-agent': Resource temporarily unavailable
+gpg: can't connect to the agent: Resource temporarily unavailable
+gpg: error: GnuPG agent unusable. Please check that a GnuPG agent can be started.
+gpg: migration aborted
+00d4:trace:unixpid:NtTerminateProcess unixpid=120008 L"\"C:\\msys64\\usr\\bin\\gpg.exe\" --homedir /etc/pacman.d/gnupg/ --no-permission-warning -K --with-colons" self=1 NtCurrentTeb()=0x67fe0000 NtCurrentTeb()->Peb=0x67ff0000 :999
+---
+ server/handle.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/server/handle.c b/server/handle.c
+index e65831b3b22..b60b100fe20 100644
+--- a/server/handle.c
++++ b/server/handle.c
+@@ -477,6 +477,13 @@ struct object *get_handle_obj( struct process *process, obj_handle_t handle,
+             set_error( STATUS_OBJECT_TYPE_MISMATCH );  /* not the right type */
+             return NULL;
+         }
++        if ((access & PROCESS_QUERY_INFORMATION) &&
++            !(entry->access & PROCESS_QUERY_INFORMATION) &&
++            (entry->access & PROCESS_QUERY_LIMITED_INFORMATION))
++        {
++            access &= ~PROCESS_QUERY_INFORMATION;
++            access |= PROCESS_QUERY_LIMITED_INFORMATION;
++        }
+         if ((entry->access & access) != access)
+         {
+             set_error( STATUS_ACCESS_DENIED );
+-- 
+GitLab
+

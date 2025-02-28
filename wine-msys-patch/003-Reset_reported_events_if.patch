@@ -1,0 +1,118 @@
+From becdb91ac073dcb228e2c21422a1c8c0edc99dd6 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
+Date: Sat, 8 Jul 2023 22:48:55 +0200
+Subject: [PATCH] server: Reset reported_events if socket gets reused.
+
+MSYS setup tries to setup some pacman/gpg key configuration.
+This involves starting dirmngr.exe which unfortunately hangs.
+Therefore gpg reports:
+    gpg: connecting dirmngr at '/etc/pacman.d/gnupg/S.dirmngr' failed: IPC connect call failed
+And fails therefore "silently".
+
+The hang in dirmngr.exe looks to be a result of reusing a socket twice.
+When the first connection attempt failed, wineserver still has
+the reported_events set.
+Therefore on the second attempt WSAEnumNetworkEvents does no longer
+report those events.
+But fhandler_socket_wsock::wait_for_events gets just left when
+there are some events received.
+
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=53574
+
+dirmngr.exe --server --no-detach --homedir /etc/pacman.d/gnupg --verbose
+
+(gdb) bt
+(gdb) print evts.lNetworkEvents
+$1 = 0
+---
+ dlls/ws2_32/tests/sock.c | 47 ++++++++++++++++++++++++++++++++++++++++
+ server/sock.c            |  4 ++++
+ 2 files changed, 51 insertions(+)
+
+diff --git a/dlls/ws2_32/tests/sock.c b/dlls/ws2_32/tests/sock.c
+index 4fd5fc00cdd..658da2080fa 100644
+--- a/dlls/ws2_32/tests/sock.c
++++ b/dlls/ws2_32/tests/sock.c
+@@ -14373,12 +14373,56 @@ static void test_send_buffering(void)
+     closesocket(client);
+ }
+ 
++static void test_msys(void)
++{
++    int ret;
++    WORD ver = MAKEWORD (2, 2);
++    WSADATA data;
++    SOCKET s;
++    struct sockaddr_in addr;
++    HANDLE wsock_evt;
++    WSANETWORKEVENTS evts = { 0 };
++
++    ok ( WSAStartup ( ver, &data ) == 0, "WSAStartup failed\n" );
++
++    s = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
++    ok(s!=INVALID_SOCKET, "socket() failed error: %d\n", WSAGetLastError());
++    if(s == INVALID_SOCKET) return;
++
++    wsock_evt = CreateEventA(NULL, TRUE, FALSE, NULL);
++    ret = WSAEventSelect(s, wsock_evt, FD_READ|FD_WRITE|FD_OOB|FD_ACCEPT|FD_CONNECT|FD_CLOSE);
++    ok(!ret, "WSAEventSelect failed with %u\n", WSAGetLastError());
++
++    memset(&addr, 0, sizeof addr);
++    addr.sin_family = AF_INET;
++    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
++
++    addr.sin_port = htons(9050);
++    ret = connect(s, (struct sockaddr*)&addr, sizeof(addr));
++    ok(ret == SOCKET_ERROR, "unexpected succeeding connect\n");
++
++    Sleep(4000);
++    ret = WSAEnumNetworkEvents(s, wsock_evt, &evts);
++    ok(!ret, "WSAEnumNetworkEvents failed with %u\n", WSAGetLastError());
++    ok(evts.lNetworkEvents == 16, "evts.lNetworkEvents == %ld expected\n", evts.lNetworkEvents);
++
++    addr.sin_port = htons(9150);
++    ret = connect(s, (struct sockaddr*)&addr, sizeof(addr));
++    ok(ret == SOCKET_ERROR, "unexpected succeeding connect\n");
++
++    Sleep(4000);
++    ret = WSAEnumNetworkEvents(s, wsock_evt, &evts);
++    ok(!ret, "WSAEnumNetworkEvents failed with %u\n", WSAGetLastError());
++    ok(evts.lNetworkEvents == 16, "evts.lNetworkEvents == %ld expected\n", evts.lNetworkEvents);
++}
++
+ START_TEST( sock )
+ {
+     int i;
+ 
+ /* Leave these tests at the beginning. They depend on WSAStartup not having been
+  * called, which is done by Init() below. */
++    if (0) {
+     test_WithoutWSAStartup();
+     test_WithWSAStartup();
+ 
+@@ -14487,4 +14531,7 @@ START_TEST( sock )
+     test_send();
+ 
+     Exit();
++    }
++
++    test_msys();
+ }
+diff --git a/server/sock.c b/server/sock.c
+index 32d622aaebc..dcd73167228 100644
+--- a/server/sock.c
++++ b/server/sock.c
+@@ -2661,6 +2661,10 @@ static void sock_ioctl( struct fd *fd, ioctl_code_t code, struct async *async )
+ 
+             case SOCK_UNCONNECTED:
+             case SOCK_CONNECTIONLESS:
++                if (sock->reported_events) {
++                    fprintf(stderr, "sock->fd=%p: resetting sock->reported_events from 0x%x to 0.\n", sock->fd, sock->reported_events);
++                    sock->reported_events = 0;
++                }
+                 break;
+         }
+ 
+-- 
+GitLab
+

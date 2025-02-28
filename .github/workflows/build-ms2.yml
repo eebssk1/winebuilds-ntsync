@@ -1,0 +1,47 @@
+name: build msys2 patch
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/eebssk1/bbk/debian-bookworm:latest
+      volumes:
+        - /root:/user
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: update and i386
+        run: |
+          dpkg --add-architecture i386
+          apt update
+          apt dist-upgrade -y --autoremove --purge
+      - name: get toolchain
+        run: exec ./toolchains.sh
+      - name: get source and patch
+        run: exec ./source.sh
+      - name: msys2 support patch
+        run: exec ./msys-patch.sh
+      - name: build 64 bit
+        run: exec ./build64.sh
+      - name: build 32 bit
+        run: exec ./build32.sh
+      - name: pack
+        run: exec ./save.sh
+      - name: upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          path: "${{ env.VER }}_rel"
+      - name: release
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: "*.tb2"
+          makeLatest: false
+          tag: ${{ env.VER }}
