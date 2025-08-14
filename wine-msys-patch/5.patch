@@ -1,4 +1,4 @@
-From f4ee66ef58d4e4b66ea3b11328d1bd2dda3da927 Mon Sep 17 00:00:00 2001
+From 78e57466069fccbb580ba1727cf074393e49e87f Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
 Date: Wed, 3 Jul 2024 01:55:37 +0200
 Subject: [PATCH] wineserver: Allow NtOpenFile with read-only files.
@@ -10,10 +10,10 @@ Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=56925
  2 files changed, 12 insertions(+)
 
 diff --git a/dlls/ntdll/tests/file.c b/dlls/ntdll/tests/file.c
-index 02bdf67796d..f949e4fb446 100644
+index dee5b04d77e..7b48f7b694d 100644
 --- a/dlls/ntdll/tests/file.c
 +++ b/dlls/ntdll/tests/file.c
-@@ -5869,6 +5869,11 @@ static void test_file_readonly_access(void)
+@@ -5887,6 +5887,11 @@ static void test_file_readonly_access(void)
      status = pNtOpenFile(&handle, GENERIC_WRITE, &attr, &io, default_sharing, FILE_NON_DIRECTORY_FILE);
      ok(status == STATUS_ACCESS_DENIED, "expected STATUS_ACCESS_DENIED, got %#lx.\n", status);
  
@@ -26,10 +26,10 @@ index 02bdf67796d..f949e4fb446 100644
      status = pNtOpenFile(&handle, DELETE, &attr, &io, default_sharing, FILE_NON_DIRECTORY_FILE);
      ok(status == STATUS_SUCCESS, "expected STATUS_SUCCESS, got %#lx.\n", status);
 diff --git a/server/fd.c b/server/fd.c
-index ce32e7f8397..c9b0fae8210 100644
+index bb0e90d99d0..a17f282a94f 100644
 --- a/server/fd.c
 +++ b/server/fd.c
-@@ -1939,6 +1939,13 @@ struct fd *open_fd( struct fd *root, const char *name, struct unicode_str nt_nam
+@@ -1951,6 +1951,13 @@ struct fd *open_fd( struct fd *root, const char *name, struct unicode_str nt_nam
                  fd->unix_fd = open( name, O_RDONLY | (flags & ~(O_TRUNC | O_CREAT | O_EXCL)), *mode );
          }
  

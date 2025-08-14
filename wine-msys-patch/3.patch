@@ -1,4 +1,4 @@
-From e7977f435d3844a11a1faa30647465636ebea5ba Mon Sep 17 00:00:00 2001
+From 56aa0a3c351e2c7abe4ad7a9d5e40f691e26837d Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
 Date: Thu, 19 Dec 2024 16:46:09 -0800
 Subject: [PATCH] ntdll: Add read and write to commited guard pages.
@@ -20,16 +20,16 @@ Based on: https://bugs.winehq.org/attachment.cgi?id=70483
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
-index 0c0a12c394d..38c884fd4af 100644
+index 202894750a0..03b9c75e297 100644
 --- a/dlls/ntdll/unix/virtual.c
 +++ b/dlls/ntdll/unix/virtual.c
-@@ -3998,7 +3998,7 @@ static NTSTATUS grow_thread_stack( char *page, struct thread_stack_info *stack_i
-     mprotect_range( page, page_size, 0, 0 );
-     if (page >= stack_info->start + page_size + stack_info->guaranteed)
+@@ -4329,7 +4329,7 @@ static NTSTATUS grow_thread_stack( char *page, struct thread_stack_info *stack_i
+     mprotect_range( page, host_page_size, 0, 0 );
+     if (page >= stack_info->start + host_page_size + stack_info->guaranteed)
      {
--        set_page_vprot_bits( page - page_size, page_size, VPROT_COMMITTED | VPROT_GUARD, 0 );
-+        set_page_vprot_bits( page - page_size, page_size, VPROT_COMMITTED | VPROT_READ | VPROT_WRITE | VPROT_GUARD, 0 );
-         mprotect_range( page - page_size, page_size, 0, 0 );
+-        set_page_vprot_bits( page - host_page_size, host_page_size, VPROT_COMMITTED | VPROT_GUARD, 0 );
++        set_page_vprot_bits( page - host_page_size, host_page_size, VPROT_COMMITTED | VPROT_READ | VPROT_WRITE | VPROT_GUARD, 0 );
+         mprotect_range( page - host_page_size, host_page_size, 0, 0 );
      }
      else  /* inside guaranteed space -> overflow exception */
 -- 

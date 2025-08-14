@@ -1,4 +1,4 @@
-From bf98241c98a277f14874e48c48923fcf97f0addc Mon Sep 17 00:00:00 2001
+From 4af6b5123b1da1e66701cc380a1341b0bc7127a8 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
 Date: Thu, 4 Jul 2024 11:05:35 +0200
 Subject: [PATCH] ws2_32: Do not fail in closesocket for unknown socket.
@@ -19,10 +19,10 @@ rsync -aq --delete-before dir-a dir-b
  1 file changed, 3 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/ws2_32/socket.c b/dlls/ws2_32/socket.c
-index 66dd32dd98d..4b94e5cce97 100644
+index 2f49157cb8b..34ef7115fdc 100644
 --- a/dlls/ws2_32/socket.c
 +++ b/dlls/ws2_32/socket.c
-@@ -1203,8 +1203,9 @@ int WINAPI closesocket( SOCKET s )
+@@ -1254,8 +1254,9 @@ int WINAPI closesocket( SOCKET s )
  
      if (!socket_list_remove( s ))
      {

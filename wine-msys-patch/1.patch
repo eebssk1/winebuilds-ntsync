@@ -1,4 +1,4 @@
-From 395d920e4ea718aeff6e9667c821b42da88c2f41 Mon Sep 17 00:00:00 2001
+From 71f29e0d71fe56ca822159cc33adffb8200485fe Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Bernhard=20=C3=9Cbelacker?= <bernhardu@mailbox.org>
 Date: Wed, 24 May 2023 22:44:57 +0200
 Subject: [PATCH] server: Allow access with PROCESS_QUERY_INFORMATION.
@@ -20,10 +20,10 @@ gpg: migration aborted
  1 file changed, 7 insertions(+)
 
 diff --git a/server/handle.c b/server/handle.c
-index e65831b3b22..b60b100fe20 100644
+index 8968df73647..a9a19445b8c 100644
 --- a/server/handle.c
 +++ b/server/handle.c
-@@ -477,6 +477,13 @@ struct object *get_handle_obj( struct process *process, obj_handle_t handle,
+@@ -482,6 +482,13 @@ struct object *get_handle_obj( struct process *process, obj_handle_t handle,
              set_error( STATUS_OBJECT_TYPE_MISMATCH );  /* not the right type */
              return NULL;
          }
