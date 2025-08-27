@@ -10,8 +10,8 @@ DEP="libasound2-dev:i386 libpulse-dev:i386 libdbus-1-dev:i386 libfontconfig-dev:
 
 apt install --ignore-missing -y $DEP || exit 128
 
-export CFLAGS="-O3 -D__1ENABLE_AGGRESSIVE_GRAPHITE9__"
-export CXXFLAGS="-O3 -D__1ENABLE_AGGRESSIVE_GRAPHITE9__"
+export CFLAGS="-I$P/include -O3 -D__1ENABLE_AGGRESSIVE_GRAPHITE9__"
+export CXXFLAGS="-I$P/include -O3 -D__1ENABLE_AGGRESSIVE_GRAPHITE9__"
 export x86_64_CFLAGS="$CFLAGS"
 export i386_CFLAGS="$CFLAGS"
 export LDFLAGS="-Wl,-O3,--relax -static-libgcc -static-libstdc++"
